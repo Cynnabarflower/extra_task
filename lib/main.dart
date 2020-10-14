@@ -310,14 +310,27 @@ class _MyHomePageState extends State<MyHomePage> {
                       width: s.width > 750 && s.aspectRatio > 1.4
                           ? s.width * 3 / 5: s.width,
                       child: showAll ?
-                  ListView.builder(itemBuilder: (context, index) {
+                  ListView.builder(
+                    itemBuilder: (context, index) {
                     return FutureBuilder(
                         future: getTask(num: index),
-                        builder: (context, snapshot) => snapshot.hasData ? Padding(
+                        builder: (context, snapshot) {
+                       print("$laba ${index} / ${LABS[laba-1].taskQuan} ${snapshot.data}");
+                          return Padding(
                           padding: const EdgeInsets.only(top: 16.0, left: 12, right: 12),
-                          child: taskWrapper(snapshot.data),
-                        ) : Container());
-                  }, itemCount: LABS[laba].taskQuan,)
+                          child: snapshot.hasData ? taskWrapper(snapshot.data) : Material(
+                            elevation: 10,
+                            borderRadius: BorderRadius.all(
+                                Radius.circular(8)),
+                            child: Container(
+                              alignment: Alignment.center,
+                              child: SizedBox(
+                              width: (s.width > 750 && s.aspectRatio > 1.4 ? s.width * 3 / 5: s.width)/5,
+                              height: (s.width > 750 && s.aspectRatio > 1.4 ? s.width * 3 / 5: s.width)/5,
+                          ),
+                            ),),
+                        );});
+                  }, itemCount: LABS[laba-1].taskQuan)
                       :
                   Container(
                     child: task == null
