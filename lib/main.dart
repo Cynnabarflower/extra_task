@@ -43,6 +43,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   var laba;
   Task task;
+  bool showAll = false;
 
   Future<Task> getTask({int num}) async {
     //Ради этого придется проект на хероку создавать, да ну нафиг
@@ -94,6 +95,84 @@ class _MyHomePageState extends State<MyHomePage> {
       return '$task задачи';
     if (task % 10 == 0 || task % 10 >= 5)
       return '$task задач';
+  }
+
+  Widget taskWrapper(Task task) {
+    return Material(
+      elevation: 10,
+      borderRadius: BorderRadius.all(Radius.circular(16)),
+      child: Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.max,
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        showAll = false;
+                        laba = null;
+                        task = null;
+                      });
+                    },
+                    child: Icon(
+                      Icons.arrow_back_rounded,
+                      color: Colors.lightBlue,
+                      size: 50,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                        left: 8.0),
+                    child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Container(
+                            child: Text(
+                              task.name ?? ' ',
+                              style:
+                              TextStyle(fontSize: 24),
+                              overflow: TextOverflow.clip,
+                            ))),
+                  )
+                ],
+              ),
+              showAll ? Container() : GestureDetector(onTap: () {
+                setState(() {
+                  showAll = true;
+                });
+              }, child: Padding(
+                padding: const EdgeInsets.only(right: 4.0),
+                child: Icon(Icons.format_list_bulleted_rounded, color: BACK_COLOR, size: 50),
+              ))
+            ],
+          ),
+          Container(
+            alignment: Alignment.center,
+            child: Container(
+                padding: EdgeInsets.all(8),
+                alignment: Alignment.topCenter,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      Text(
+                        task == null ||
+                            task.text.isEmpty
+                            ? ' '
+                            : task.text,
+                        style:
+                        TextStyle(fontSize: 18),
+                      ),
+                    ],
+                  ),
+                )),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -209,94 +288,56 @@ class _MyHomePageState extends State<MyHomePage> {
                                   .toList(),
                             );
 
-                            return scroll
-                                ? SingleChildScrollView(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16.0),
-                                      child: wp,
-                                    ),
-                                  )
-                                : wp;
+                            return Stack(
+                              children: [
+                                Align(
+                                  alignment: Alignment.bottomRight,
+                                  child: SelectableText('Задачи сюда: dipodbolotov@edu.hse.ru', style: TextStyle(color: Colors.white),),
+                                ),
+                                scroll
+                                    ? SingleChildScrollView(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16.0),
+                                          child: wp,
+                                        ),
+                                      )
+                                    : wp,
+                              ],
+                            );
                           },
                         )
-                      : Material(
-                          elevation: 10,
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
-                          child: Container(
-                            width: s.width > 750 && s.aspectRatio > 1.4
-                                ? s.width * 3 / 5: s.width,
-                            child: task == null
-                                ? Container(
-                              alignment: Alignment.center,
-                                  child:
-                                    SizedBox(
-                                      width: s.shortestSide/5,
-                                      height: s.shortestSide/5,
-                                      child: CircularProgressIndicator(
-                                          backgroundColor: Colors.transparent,
-                                          strokeWidth: 8,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                              BACK_COLOR),
-                                        ),
-                                    ),
-                                )
-                                : Column(
-                                    children: [
-                                      Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () {
-                                              setState(() {
-                                                laba = null;
-                                                task = null;
-                                              });
-                                            },
-                                            child: Icon(
-                                              Icons.arrow_back_rounded,
-                                              color: Colors.lightBlue,
-                                              size: 50,
-                                            ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                                left: 8.0),
-                                            child: FittedBox(
-                                                fit: BoxFit.scaleDown,
-                                                child: Container(
-                                                    child: Text(
-                                                  task.name ?? ' ',
-                                                  style:
-                                                      TextStyle(fontSize: 24),
-                                                  overflow: TextOverflow.clip,
-                                                ))),
-                                          )
-                                        ],
-                                      ),
-                                      Container(
-                                        alignment: Alignment.center,
-                                        child: Container(
-                                            padding: EdgeInsets.all(8),
-                                            alignment: Alignment.topCenter,
-                                            child: SingleChildScrollView(
-                                              child: Column(
-                                                children: [
-                                                  Text(
-                                                    task == null ||
-                                                            task.text.isEmpty
-                                                        ? ' '
-                                                        : task.text,
-                                                    style:
-                                                        TextStyle(fontSize: 18),
-                                                  ),
-                                                ],
-                                              ),
-                                            )),
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                        ),
+                      : Container(
+                      width: s.width > 750 && s.aspectRatio > 1.4
+                          ? s.width * 3 / 5: s.width,
+                      child: showAll ?
+                  ListView.builder(itemBuilder: (context, index) {
+                    return FutureBuilder(
+                        future: getTask(num: index),
+                        builder: (context, snapshot) => snapshot.hasData ? Padding(
+                          padding: const EdgeInsets.only(top: 16.0, left: 12, right: 12),
+                          child: taskWrapper(snapshot.data),
+                        ) : Container());
+                  }, itemCount: LABS[laba].taskQuan,)
+                      :
+                  Container(
+                    child: task == null
+                        ? Container(
+                      alignment: Alignment.center,
+                          child:
+                            SizedBox(
+                              width: s.shortestSide/5,
+                              height: s.shortestSide/5,
+                              child: CircularProgressIndicator(
+                                  backgroundColor: Colors.transparent,
+                                  strokeWidth: 8,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      BACK_COLOR),
+                                ),
+                            ),
+                        )
+                        :
+                        taskWrapper(task),
+                  )),
                 ),
               )
             ])));
