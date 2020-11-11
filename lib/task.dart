@@ -10,24 +10,26 @@ class Task extends StatefulWidget {
   String text = '';
   Map<String, String> tests = Map();
   int difficulty = 3;
-  Image image;
   String id;
   String lab = '';
+  String mail = '';
 
   Task({this.id});
 
   Task.fromJson(dynamic a) {
     this.name = a['name'];
     if (name != null && name.isEmpty) name = null;
-    this.text = proceed(a['text']);
+    this.text = (a['text']);
     this.tests = ((a['test'] ?? {'': ''}) as Map).cast<String, String>();
   }
 
-  Task.fromFirestoreDoc(dynamic a) {
+  Task.fromFirestoreDoc(dynamic a, {editable : false}) {
     this.name = a['name'];
-    if (name != null && name.isEmpty) name = null;
-    this.text = proceed(a['description']);
-    this.tests = ((a['examples'] ?? Map()) as Map).cast<String, String>();
+    this.text = (a['description']);
+    this.difficulty = a['difficulty'];
+    this.tests = ((a['tests'] ?? Map()) as Map).cast<String, String>();
+    this.lab = a['lab'];
+    this.mail = a['mail'];
   }
 
   Map<String, dynamic> toFirebaseDoc() {
@@ -37,10 +39,11 @@ class Task extends StatefulWidget {
     m['difficulty'] = difficulty;
     m['tests'] = tests;
     m['lab'] = lab;
+    m['mail'] = mail;
     return m;
   }
 
-  String proceed(var str) {
+  String process(var str) {
     //there should be a better way
     if (str == null) return '';
     var s = '';
@@ -114,7 +117,7 @@ class _TaskState extends State<Task> {
                       Text(
                        widget.text.isEmpty
                             ? ' '
-                            : widget.text,
+                            : (widget.text),
                         style:
                         TextStyle(fontSize: 18),
                       ),

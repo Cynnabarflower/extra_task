@@ -5,7 +5,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
+import 'acceptTasks.dart';
 import 'addTask.dart';
 import 'laba.dart';
 import 'myFrame.dart';
@@ -16,18 +18,25 @@ void main() async {
   setUrlStrategy(PathUrlStrategy());
   await Firebase.initializeApp();
   firestore = FirebaseFirestore.instance;
-  auth = FirebaseAuth.instance;
+  // auth = FirebaseAuth.instance;
+  _googleSignIn = GoogleSignIn(
+    scopes: [
+      'email',
+      'https://www.googleapis.com/auth/contacts.readonly',
+    ],
+  );
   WidgetsFlutterBinding.ensureInitialized();
   runApp(MyApp());
 }
 
 FirebaseFirestore firestore;
-FirebaseAuth auth;
+// FirebaseAuth auth;
+GoogleSignIn _googleSignIn;
 
 bool lightTheme = true;
 
 String signInEmail = '';
-User user;
+GoogleSignInAccount user;
 List<Laba> labs = [];
 
 class MyApp extends StatelessWidget {
@@ -37,7 +46,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('MyAppp build');
     return StreamBuilder<AppTheme>(
         initialData: AppTheme.LIGHT_THEME,
         stream: bloc.themeData,
@@ -58,11 +66,15 @@ class MyApp extends StatelessWidget {
                     builder: (context) => AddTask(),
                     settings: RouteSettings(name: 'addTask'));
               }
+              if (settings.name.endsWith('acceptTasks')) {
+                return MaterialPageRoute(
+                    builder: (context) => AcceptTasks(),
+                    settings: RouteSettings(name: 'acceptTasks'));
+              }
 
               var uri = Uri.parse(settings.name);
               if (uri.pathSegments.length == 1 &&
                   uri.pathSegments.last.startsWith('lab')) {
-                print(uri.pathSegments.last);
                 var lab = labs.firstWhere(
                     (element) => element.path == uri.pathSegments.last,
                     orElse: () => null);
@@ -86,11 +98,11 @@ class MyApp extends StatelessWidget {
   }
 
   Future<void> loadLabNames() async {
-    print('loading lab names...');
     labs.clear();
     var labNames = (await firestore.doc('labs/names').get());
     for (var lab in labNames['names'].entries)
-      labs.add(Laba(lab.key, num: 0, name: lab.value));
+      labs.add(Laba(lab.key, name: lab.value));
+    labs.sort((a, b) => a.num > b.num ? 1 : -1);
   }
 }
 
@@ -122,16 +134,6 @@ class _MyHomePageState extends State<MyHomePage> {
     return null;
   }
 
-  Future<List<Task>> getTasks(int lab) async {
-    var tasks = List<Task>();
-    var taskDocs =
-        (await firestore.collection('labs/lab$lab/tasks').get()).docs;
-    taskDocs.forEach((element) {
-      tasks.add(Task.fromFirestoreDoc(element));
-    });
-    return tasks;
-  }
-
   login() async {}
 
   @override
@@ -157,178 +159,165 @@ class _MyHomePageState extends State<MyHomePage> {
 
     return Scaffold(
         body: Wrap(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                  borderRadius:
-                      BorderRadius.vertical(bottom: Radius.circular(8)),
-                  ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Visibility(
-                    visible: false,
-                    child: IconButton(
-                      icon:
-                          user == null ? Icon(Icons.login) : Icon(Icons.logout),
-                      onPressed: () {
-                        showDialog(
-                            context: context,
-                            builder: (BuildContext context) {
-                              return AlertDialog(
-                                content: Stack(
-                                  children: <Widget>[
-                                    Form(
-                                      key: _formKey,
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: <Widget>[
-                                          Padding(
-                                            padding: EdgeInsets.all(8.0),
-                                            child: TextFormField(
-                                                controller: _emailController,
-                                                decoration:
-                                                    const InputDecoration(
-                                                  icon: Icon(Icons.mail),
-                                                  labelText: 'Email',
-                                                ),
-                                                autovalidateMode:
-                                                    AutovalidateMode.disabled,
-                                                validator: (value) => (!value
-                                                            .endsWith(
-                                                                '@edu.hse.ru') &&
-                                                        value.contains('@'))
-                                                    ? 'Используйте почту @edu.hse.ru'
-                                                    : null),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: RaisedButton(
-                                              child: Text("Login"),
-                                              onPressed: () async {
-                                                var emailLink =
-                                                    'http://localhost:63288/#/';
-                                                /*         if (_formKey.currentState
-                                                              .validate()) {
-                                                            var users = await firestore.collection('users').where('email', isEqualTo: _emailController.text).get();
-                                                            if (users.size == 1) {
-                                                              signInEmail = _emailController.text;
-                                                              await FirebaseAuth.instance.sendSignInLinkToEmail(email: _emailController.text, actionCodeSettings: ActionCodeSettings(url: emailLink, handleCodeInApp: true));
-                                                              if (FirebaseAuth.instance.isSignInWithEmailLink(emailLink)) {
-                                                                FirebaseAuth.instance.signInWithEmailLink(email: signInEmail, emailLink: emailLink).then((value) {
-                                                                  user = value.user;
-                                                                  setState(() {
-                                                                  });
-                                                                });
-                                                              }
-                                                            }
-                                                          }*/
-                                              },
-                                            ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Text(
-                                                'Если ваша почта есть в списке, туда придет письмо с ссылкой для авторизации.'),
-                                          )
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            });
-                      },
-                    ),
-                  ),
-                  IconButton(
-                    icon: lightTheme
-                        ? Icon(Icons.nightlight_round)
-                        : Icon(
-                            Icons.wb_sunny,
-                          ),
-                    onPressed: () => setState((){applyTheme(Theme.of(context).brightness != Brightness.light);}),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.add),
-                    onPressed: () {
-                      Navigator.of(context).pushNamed('addTask');
-                    },
-                  ),
-                ],
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(8)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FutureBuilder(
+                future: () async {
+                  if (FirebaseAuth.instance.currentUser == null || FirebaseAuth.instance.currentUser.isAnonymous)
+                    return false;
+                  var e = await FirebaseFirestore.instance.doc('users/${FirebaseAuth.instance.currentUser.uid}').get();
+                  return e.exists;
+                }(),
+                builder: (context, snapshot) {
+                  return Visibility(visible: snapshot.hasData && snapshot.data, child: IconButton(
+                    icon: Icon(Icons.mail),
+                    onPressed: () => setState(() {
+                      Navigator.pushNamed(context, 'acceptTasks');
+                    }),
+                  ),);
+                },
               ),
-            ),
-            MyFrame(
-              color: Theme.of(context).backgroundColor,
-              child: Container(
-                  alignment: Alignment.center,
-                  child: Column(mainAxisSize: MainAxisSize.max, children: [
-                    Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Stack(
-                          children: [
-                            Align(
-                              alignment: Alignment.bottomRight,
-                              child: SelectableText(
-                                'Задачи сюда: dipodbolotov@edu.hse.ru',
+              IconButton(
+                icon: FirebaseAuth.instance.currentUser == null ? Icon(Icons.login) : Icon(Icons.logout),
+                onPressed: () async {
+                  if (FirebaseAuth.instance.currentUser == null) {
+                    await Firebase.initializeApp();
+
+                    final GoogleSignInAccount googleSignInAccount =
+                        await _googleSignIn.signIn();
+                    final GoogleSignInAuthentication
+                        googleSignInAuthentication =
+                        await googleSignInAccount.authentication;
+
+                    final AuthCredential credential =
+                        GoogleAuthProvider.credential(
+                      accessToken: googleSignInAuthentication.accessToken,
+                      idToken: googleSignInAuthentication.idToken,
+                    );
+
+                    final UserCredential authResult = await FirebaseAuth
+                        .instance
+                        .signInWithCredential(credential);
+                    final User user = authResult.user;
+
+                    if (user != null) {
+                      assert(!user.isAnonymous);
+                      assert(await user.getIdToken() != null);
+
+                      final User currentUser =
+                          FirebaseAuth.instance.currentUser;
+                      assert(user.uid == currentUser.uid);
+                    }
+                  } else {
+                    _googleSignIn.signOut();
+                    FirebaseAuth.instance.signOut();
+                  }
+                  setState(() {});
+                },
+              ),
+              IconButton(
+                icon: lightTheme
+                    ? Icon(Icons.nightlight_round)
+                    : Icon(
+                        Icons.wb_sunny,
+                      ),
+                onPressed: () => setState(() {
+                  applyTheme(Theme.of(context).brightness != Brightness.light);
+                }),
+              ),
+              IconButton(
+                icon: Icon(Icons.add),
+                onPressed: () {
+                  Navigator.of(context).pushNamed('addTask');
+                },
+              ),
+            ],
+          ),
+        ),
+        MyFrame(
+          color: Theme.of(context).backgroundColor,
+          child: Container(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return FutureBuilder(
+                        future: () async {
+                          while (labs.isEmpty) {
+                            await Future.delayed(Duration(milliseconds: 500));
+                          }
+                          return true;
+                        }(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return SingleChildScrollView(
+                              child: Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.start,
+                                alignment: WrapAlignment.start,
+                                runSpacing: constraints.maxWidth / 40,
+                                spacing: constraints.maxWidth / 40,
+                                key: GlobalKey(),
+                                children: [
+                                  ...labs.map((e) {
+                                    return Container(
+                                      width: s.aspectRatio < 0.8
+                                          ? constraints.maxWidth
+                                          : constraints.maxWidth / 4,
+                                      child: e.button(context,
+                                          mobile: s.aspectRatio < 0.8),
+                                    );
+                                  }).toList(),
+                                  Container(
+                                    height: constraints.maxWidth / 10,
+                                  )
+                                ],
                               ),
+                            );
+                          } else if (snapshot.hasError) {
+                            return Center(
+                                child: Column(
+                              children: [
+                                Text(
+                                  'Что-то неработает',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headline2
+                                      .copyWith(
+                                          color: Colors.white.withOpacity(0.8)),
+                                ),
+                                Text(
+                                  snapshot.error,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headline6
+                                      .copyWith(
+                                          color: Colors.white.withOpacity(0.6)),
+                                ),
+                              ],
+                            ));
+                          }
+                          return Container(
+                            alignment: Alignment.center,
+                            child: CircularProgressIndicator(
+                              backgroundColor: Colors.transparent,
+                              strokeWidth: 5,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
-                            Container(
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  return FutureBuilder(
-                                    future: () async {
-                                      while (labs.isEmpty) {
-                                        await Future.delayed(
-                                            Duration(milliseconds: 500));
-                                      }
-                                      return true;
-                                    }(),
-                                    builder: (context, snapshot) {
-                                      if (snapshot.hasData) {
-                                        return SingleChildScrollView(
-                                          child: Wrap(
-                                            crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            alignment:
-                                                WrapAlignment.spaceAround,
-                                            runSpacing:
-                                                constraints.maxWidth / 40,
-                                            spacing: constraints.maxWidth / 40,
-                                            key: GlobalKey(),
-                                            children: labs.map((e) {
-                                              return Container(
-                                                width: s.aspectRatio < 0.8
-                                                    ? constraints.maxWidth
-                                                    : constraints.maxWidth / 4,
-                                                child: e.button(context,
-                                                    mobile:
-                                                        s.aspectRatio < 0.8),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        );
-                                      } else if (snapshot.hasError) {
-                                        print(snapshot.error);
-                                      }
-                                      return Align(
-                                        alignment: Alignment.center,
-                                        child: CircularProgressIndicator(
-                                          backgroundColor: Colors.transparent,
-                                          strokeWidth: 5,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                            )
-                          ],
-                        ))
-                  ])),
-            ),
-          ],
-        ));
+                          );
+                        },
+                      );
+                    },
+                  ))),
+        ),
+      ],
+    ));
   }
 }

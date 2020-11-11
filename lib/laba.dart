@@ -1,4 +1,6 @@
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:extra_task/addTask.dart';
 import 'package:extra_task/task.dart';
@@ -10,11 +12,15 @@ import 'theme.dart';
 
 class Laba extends StatefulWidget {
   String path;
-  int num = 0;
+  int num;
   String name = 'name';
   List<Task> tasks = [];
 
-  Laba(this.path, {this.num, this.name}) {}
+  Laba(this.path, {this.num, this.name}) {
+    if (num == null) {
+      num = int.tryParse(path.replaceAll(RegExp('[^0-9]'), ''));
+    }
+  }
 
   String taskStr(int task) {
     if (task == null || task == 0)
@@ -43,46 +49,49 @@ class Laba extends StatefulWidget {
               Radius.circular(8)),
           child: AspectRatio(
             aspectRatio: mobile ? 3 : 1,
-            child: Column(
-              mainAxisAlignment:
-              MainAxisAlignment
-                  .spaceBetween,
-              children: [
-                Flexible(
-                    flex: 70,
-                    child: FittedBox(
-                        fit: BoxFit.fill,
-                        child: Text(
-                          num.toString(),
-                          style: TextStyle(
-                              fontSize: 200),
-                        ))),
-                Flexible(
-                    flex: 10,
-                    child: Container(
-                        alignment: Alignment.topCenter,
-                        child: FittedBox(
-                            fit: BoxFit.fitWidth,
-                            child: Text(
-                              taskStr(0),
-                              style: TextStyle(
-                                  fontSize: 200,
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                mainAxisAlignment:
+                MainAxisAlignment
+                    .spaceBetween,
+                children: [
+                  Flexible(
+                      flex: 70,
+                      child: FittedBox(
+                          fit: BoxFit.fill,
+                          child: Text(
+                            num.toString(),
+                            style: TextStyle(
+                                fontSize: 200),
+                          ))),
+                  Flexible(
+                      flex: 10,
+                      child: Container(
+                          alignment: Alignment.topCenter,
+                          child: FittedBox(
+                              fit: BoxFit.fitWidth,
+                              child: Text(
+                                taskStr(0),
+                                style: TextStyle(
+                                    fontSize: 200,
 
-                              ),
-                            )))),
-                Flexible(
-                    flex: 20,
-                    child: Container(
-                        child: FittedBox(
-                            fit: BoxFit.fitHeight,
-                            child: Text(
-                              '$name',
-                              style: TextStyle(
-                                  fontSize: 200,
+                                ),
+                              )))),
+                  Flexible(
+                      flex: 20,
+                      child: Container(
+                          child: FittedBox(
+                              fit: BoxFit.fitHeight,
+                              child: Text(
+                                '$name',
+                                style: TextStyle(
+                                    fontSize: 200,
 
-                              ),
-                            ))))
-              ],
+                                ),
+                              ))))
+                ],
+              ),
             ),
           ),
         ),
@@ -96,15 +105,29 @@ class Laba extends StatefulWidget {
 
 class _LabaState extends State<Laba> {
 
+
+  Timer goHome;
+
   Future<List<dynamic>> loadTasks({force : false}) async {
 
     if (!force && widget.tasks.isNotEmpty) {
       return widget.tasks;
     }
-    print('loading ${widget.path} from firebase...');
-    var lab = (await firestore.doc('labs/'+widget.path).get()).data();
-    widget.tasks = (lab['tasks'].map((e) => Task.fromFirestoreDoc(e)).toList()).cast<Task>();
-    return widget.tasks;
+      var lab = (await firestore.doc('labs/' + widget.path).get());
+      if (lab.exists) {
+        widget.tasks =
+            (lab['tasks'].map((e) => Task.fromFirestoreDoc(e)).toList()).cast<
+                Task>();
+        return widget.tasks;
+      } else return [];
+  }
+
+
+  @override
+  void dispose() {
+    if (goHome != null)
+      goHome.cancel();
+    super.dispose();
   }
 
   @override
@@ -157,6 +180,20 @@ class _LabaState extends State<Laba> {
               future: loadTasks(),
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
+                  if (snapshot.data == null) {
+                    Navigator.pushNamed(context, '/404');
+                    return Container();
+                  } else if (snapshot.data.isEmpty) {
+                    if (goHome != null)
+                      goHome.cancel();
+                    goHome = Timer(Duration(seconds: 5),() {
+                      if (ModalRoute.of(context).isCurrent) {
+                        Navigator.pop(context);
+                      } } );
+                    return Center(
+                      child: Text('Тут пока нет задач', style: Theme.of(context).textTheme.headline2.copyWith(color: Colors.white.withOpacity(0.8)),)
+                    );
+                  }
                   return ListView( shrinkWrap: true, children: (snapshot.data as List<Widget>));
                 } else if (snapshot.hasError) {
                   print(snapshot.error);
