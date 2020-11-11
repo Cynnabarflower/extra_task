@@ -1,27 +1,96 @@
-import 'dart:convert';
 import 'dart:math';
+import 'package:extra_task/task.dart';
+import 'package:extra_task/theme.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-void main() {
+import 'addTask.dart';
+import 'laba.dart';
+import 'myFrame.dart';
+import 'notFound.dart';
+import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+
+void main() async {
+  setUrlStrategy(PathUrlStrategy());
+  await Firebase.initializeApp();
+  firestore = FirebaseFirestore.instance;
+  auth = FirebaseAuth.instance;
   WidgetsFlutterBinding.ensureInitialized();
   runApp(MyApp());
 }
 
-const BACK_COLOR = Colors.lightBlue;
+FirebaseFirestore firestore;
+FirebaseAuth auth;
+
+bool lightTheme = true;
+
+String signInEmail = '';
+User user;
+List<Laba> labs = [];
 
 class MyApp extends StatelessWidget {
+  MyApp() {
+    loadLabNames();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Extra task',
-      theme: ThemeData(
-        primarySwatch: BACK_COLOR,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      home: MyHomePage(),
-    );
+    print('MyAppp build');
+    return StreamBuilder<AppTheme>(
+        initialData: AppTheme.LIGHT_THEME,
+        stream: bloc.themeData,
+        builder: (context, AsyncSnapshot<AppTheme> snapshot) {
+          return MaterialApp(
+            title: 'Extra task',
+            theme: snapshot.data.themeData,
+            initialRoute: '/',
+            onGenerateRoute: (settings) {
+              if (settings.name == '/') {
+                return MaterialPageRoute(
+                    builder: (context) => MyHomePage(),
+                    settings: RouteSettings(name: ''));
+              }
+
+              if (settings.name.endsWith('addTask')) {
+                return MaterialPageRoute(
+                    builder: (context) => AddTask(),
+                    settings: RouteSettings(name: 'addTask'));
+              }
+
+              var uri = Uri.parse(settings.name);
+              if (uri.pathSegments.length == 1 &&
+                  uri.pathSegments.last.startsWith('lab')) {
+                print(uri.pathSegments.last);
+                var lab = labs.firstWhere(
+                    (element) => element.path == uri.pathSegments.last,
+                    orElse: () => null);
+                if (lab == null) {
+                  return MaterialPageRoute(
+                      builder: (context) => Laba(uri.pathSegments.last),
+                      settings:
+                          RouteSettings(name: '/${uri.pathSegments.last}'));
+                } else
+                  return MaterialPageRoute(
+                      builder: (context) => lab,
+                      settings: RouteSettings(name: '/${lab.path}'));
+              }
+
+              return MaterialPageRoute(
+                  builder: (context) => NotFound(),
+                  settings: RouteSettings(name: '/404'));
+            },
+          );
+        });
+  }
+
+  Future<void> loadLabNames() async {
+    print('loading lab names...');
+    labs.clear();
+    var labNames = (await firestore.doc('labs/names').get());
+    for (var lab in labNames['names'].entries)
+      labs.add(Laba(lab.key, num: 0, name: lab.value));
   }
 }
 
@@ -33,375 +102,233 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  var LABS = [
-    Laba(1, 1, '''Массив, удаление сдвигом'''),
-    Laba(1, 2, '''Досрочный выход из цикла, целые числа'''),
-    Laba(2, 3, '''Использование процедур и функций'''),
-    Laba(2, 4, '''Обработка символьных строк'''),
-    Laba(2, 5, '''Файлы, множества, записи'''),
-  ];
-
   var laba;
   Task task;
   bool showAll = false;
 
-  Future<Task> getTask({int num}) async {
-    //Ради этого придется проект на хероку создавать, да ну нафиг
-    /*    var a = fb.storage().refFromURL('gs://extra-task.appspot.com');
-    print(a.child('lab1/lab1/txt'));
-
-*/ /*    a.child('lab1/lab1.txt').getDownloadURL().then((value) {
-      print(value.toString());
-      http.get(value).then((value) {
-        print(value.statusCode);
-        task = Task();
-        setState(() {});
-        print(value.body);});
-    });*/
-    var f = await rootBundle.loadString('assets/laba$laba.txt');
-    var a = json.decode(f) as List<dynamic>;
-    if (a.isEmpty)
-      return null;
-    if (num == null || num < 0 || num >= a.length) {
-      num = Random().nextInt(a.length);
+  Future<Task> getTask(int lab, {int num}) async {
+    if (num != null) {
+      var f = await firestore.doc('labs/lab$lab/tasks/task$num').get();
+      if (f.exists) {
+        return Task.fromFirestoreDoc(f);
+      }
+    } else {
+      var tasks = await firestore.collection('labs/lab$lab/tasks').get();
+      if (tasks.size > 0) {
+        var n = Random().nextInt(tasks.size);
+        return await getTask(lab, num: n);
+      }
     }
-    return Task.fromJson(a[num] as Map<String, dynamic>);
+    return null;
   }
 
-  loadLabQuans() async {
-
-    for (var lab in LABS) {
-      var f = await rootBundle.loadString('assets/laba${lab.num}.txt');
-      var a = json.decode(f) as List<dynamic>;
-      lab.taskQuan = a.length;
-    }
-    setState(() {});
+  Future<List<Task>> getTasks(int lab) async {
+    var tasks = List<Task>();
+    var taskDocs =
+        (await firestore.collection('labs/lab$lab/tasks').get()).docs;
+    taskDocs.forEach((element) {
+      tasks.add(Task.fromFirestoreDoc(element));
+    });
+    return tasks;
   }
+
+  login() async {}
 
   @override
   void initState() {
-    loadLabQuans();
     super.initState();
+    applyTheme(true);
   }
 
   String taskStr(int task) {
-    if (task == null || task == 0)
-      return '-';
-    if (task >= 5 && task <= 20)
-      return '$task задач';
-    if (task % 10 == 1)
-      return '$task задача';
-    if (task % 10 <= 4)
-      return '$task задачи';
-    if (task % 10 == 0 || task % 10 >= 5)
-      return '$task задач';
+    if (task == null || task == 0) return '-';
+    if (task >= 5 && task <= 20) return '$task задач';
+    if (task % 10 == 1) return '$task задача';
+    if (task % 10 <= 4) return '$task задачи';
+    if (task % 10 == 0 || task % 10 >= 5) return '$task задач';
   }
 
-  Widget taskWrapper(Task task) {
-    return Material(
-      elevation: 10,
-      borderRadius: BorderRadius.all(Radius.circular(16)),
-      child: Column(
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.max,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        showAll = false;
-                        laba = null;
-                        task = null;
-                      });
-                    },
-                    child: Icon(
-                      Icons.arrow_back_rounded,
-                      color: Colors.lightBlue,
-                      size: 50,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(
-                        left: 8.0),
-                    child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Container(
-                            child: Text(
-                              task.name ?? ' ',
-                              style:
-                              TextStyle(fontSize: 24),
-                              overflow: TextOverflow.clip,
-                            ))),
-                  )
-                ],
-              ),
-              showAll ? Container() : GestureDetector(onTap: () {
-                setState(() {
-                  showAll = true;
-                });
-              }, child: Padding(
-                padding: const EdgeInsets.only(right: 4.0),
-                child: Icon(Icons.format_list_bulleted_rounded, color: BACK_COLOR, size: 50),
-              ))
-            ],
-          ),
-          Container(
-            alignment: Alignment.center,
-            child: Container(
-                padding: EdgeInsets.all(8),
-                alignment: Alignment.topCenter,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      Text(
-                        task == null ||
-                            task.text.isEmpty
-                            ? ' '
-                            : task.text,
-                        style:
-                        TextStyle(fontSize: 18),
-                      ),
-                    ],
-                  ),
-                )),
-          ),
-        ],
-      ),
-    );
-  }
+  GlobalKey<FormState> _formKey = GlobalKey();
+  TextEditingController _emailController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
     var s = MediaQuery.of(context).size;
-    var cellW = 0.0;
-    var cellH = 0.0;
-    var scroll = false;
 
     return Scaffold(
-        body: Container(
-            alignment: Alignment.center,
-            padding: EdgeInsets.only(left: 12, right: 12, top: 16, bottom: 0),
-            color: BACK_COLOR,
-            child: Column(mainAxisSize: MainAxisSize.max, children: [
-              Flexible(
-                flex: 5,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: laba == null
-                      ? LayoutBuilder(
-                          builder: (context, constraints) {
-                            var wrapSpacing = 8.0;
-                            var wrapRunSpacing = 8.0;
-                            if (s.aspectRatio < 0.9 || s.width < 250) {
-                              cellW = s.width * 0.8;
-                              cellH = cellW * 1 / 3;
-                              scroll = true;
-                            } else {
-                              var w = constraints.maxWidth;
-                              var h = constraints.maxHeight;
-                              var columns = max(w / h, w / 250).round();
-                              var rows = LABS.length ~/ columns +
-                                  (LABS.length % columns > 0 ? 1 : 0);
-                              cellW = min((w - wrapSpacing * columns) / columns,
-                                  (h - wrapRunSpacing * rows) / rows);
-                              cellH = cellW;
-                            }
-
-                            var wp = Wrap(
-                              clipBehavior: Clip.none,
-                              alignment: WrapAlignment.start,
-                              spacing: wrapSpacing,
-                              runSpacing: wrapRunSpacing,
-                              children: LABS
-                                  .map((e) => InkWell(
-                                        onTap: () {
-                                          laba = e.num;
-                                          setState(() {});
-                                          getTask().then((value) {
-                                            if (value == null) {
-                                              laba = null;
-                                            } else {
-                                              task = value;
-                                            }
-                                            setState(() {});
-                                          });
-                                        },
-                                        child: Material(
-                                          elevation: 10,
-                                          borderRadius: BorderRadius.all(
-                                              Radius.circular(8)),
-                                          child: Container(
-                                            height: cellH,
-                                            width: cellW,
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Flexible(
-                                                    flex: 70,
-                                                    child: FittedBox(
-                                                        fit: BoxFit.fill,
-                                                        child: Text(
-                                                          e.num.toString(),
-                                                          style: TextStyle(
-                                                              fontSize: 200,
-                                                              color:
-                                                                  BACK_COLOR),
-                                                        ))),
-                                                Flexible(
-                                                    flex: 10 + (scroll ? 5 : 0),
-                                                    child: Container(
-                                                      alignment: Alignment.topCenter,
-                                                        child: FittedBox(
-                                                            fit: BoxFit.fitWidth,
-                                                            child: Text(
-                                                              taskStr(e.taskQuan),
-                                                              style: TextStyle(
-                                                                  fontSize: 200,
-                                                                  color: BACK_COLOR
-                                                              ),
-                                                            )))),
-                                                Flexible(
-                                                    flex: 20,
-                                                    child: Container(
-                                                        child: FittedBox(
-                                                        fit: BoxFit.fitHeight,
-                                                        child: Text(
-                                                          e.name,
-                                                          style: TextStyle(
-                                                              fontSize: 200,
-                                                              color: BACK_COLOR
-                                                          ),
-                                                        ))))
-                                              ],
-                                            ),
-                                            padding: EdgeInsets.all(8),
+        body: Wrap(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                  borderRadius:
+                      BorderRadius.vertical(bottom: Radius.circular(8)),
+                  ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Visibility(
+                    visible: false,
+                    child: IconButton(
+                      icon:
+                          user == null ? Icon(Icons.login) : Icon(Icons.logout),
+                      onPressed: () {
+                        showDialog(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return AlertDialog(
+                                content: Stack(
+                                  children: <Widget>[
+                                    Form(
+                                      key: _formKey,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: <Widget>[
+                                          Padding(
+                                            padding: EdgeInsets.all(8.0),
+                                            child: TextFormField(
+                                                controller: _emailController,
+                                                decoration:
+                                                    const InputDecoration(
+                                                  icon: Icon(Icons.mail),
+                                                  labelText: 'Email',
+                                                ),
+                                                autovalidateMode:
+                                                    AutovalidateMode.disabled,
+                                                validator: (value) => (!value
+                                                            .endsWith(
+                                                                '@edu.hse.ru') &&
+                                                        value.contains('@'))
+                                                    ? 'Используйте почту @edu.hse.ru'
+                                                    : null),
                                           ),
-                                        ),
-                                      ))
-                                  .toList(),
-                            );
-
-                            return Stack(
-                              children: [
-                                Align(
-                                  alignment: Alignment.bottomRight,
-                                  child: SelectableText('Задачи сюда: dipodbolotov@edu.hse.ru', style: TextStyle(color: Colors.white),),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: RaisedButton(
+                                              child: Text("Login"),
+                                              onPressed: () async {
+                                                var emailLink =
+                                                    'http://localhost:63288/#/';
+                                                /*         if (_formKey.currentState
+                                                              .validate()) {
+                                                            var users = await firestore.collection('users').where('email', isEqualTo: _emailController.text).get();
+                                                            if (users.size == 1) {
+                                                              signInEmail = _emailController.text;
+                                                              await FirebaseAuth.instance.sendSignInLinkToEmail(email: _emailController.text, actionCodeSettings: ActionCodeSettings(url: emailLink, handleCodeInApp: true));
+                                                              if (FirebaseAuth.instance.isSignInWithEmailLink(emailLink)) {
+                                                                FirebaseAuth.instance.signInWithEmailLink(email: signInEmail, emailLink: emailLink).then((value) {
+                                                                  user = value.user;
+                                                                  setState(() {
+                                                                  });
+                                                                });
+                                                              }
+                                                            }
+                                                          }*/
+                                              },
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Text(
+                                                'Если ваша почта есть в списке, туда придет письмо с ссылкой для авторизации.'),
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                scroll
-                                    ? SingleChildScrollView(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16.0),
-                                          child: wp,
-                                        ),
-                                      )
-                                    : wp,
-                              ],
-                            );
-                          },
-                        )
-                      : Container(
-                      width: s.width > 750 && s.aspectRatio > 1.4
-                          ? s.width * 3 / 5: s.width,
-                      child: showAll ?
-                  ListView.builder(
-                    itemBuilder: (context, index) {
-                    return FutureBuilder(
-                        future: getTask(num: index),
-                        builder: (context, snapshot) {
-                       print("$laba ${index} / ${LABS[laba-1].taskQuan} ${snapshot.data}");
-                          return Padding(
-                          padding: const EdgeInsets.only(top: 16.0, left: 12, right: 12),
-                          child: snapshot.hasData ? taskWrapper(snapshot.data) : Material(
-                            elevation: 10,
-                            borderRadius: BorderRadius.all(
-                                Radius.circular(8)),
-                            child: Container(
-                              alignment: Alignment.center,
-                              child: SizedBox(
-                              width: (s.width > 750 && s.aspectRatio > 1.4 ? s.width * 3 / 5: s.width)/5,
-                              height: (s.width > 750 && s.aspectRatio > 1.4 ? s.width * 3 / 5: s.width)/5,
+                              );
+                            });
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    icon: lightTheme
+                        ? Icon(Icons.nightlight_round)
+                        : Icon(
+                            Icons.wb_sunny,
                           ),
-                            ),),
-                        );});
-                  }, itemCount: LABS[laba-1].taskQuan)
-                      :
-                  Container(
-                    child: task == null
-                        ? Container(
-                      alignment: Alignment.center,
-                          child:
-                            SizedBox(
-                              width: s.shortestSide/5,
-                              height: s.shortestSide/5,
-                              child: CircularProgressIndicator(
-                                  backgroundColor: Colors.transparent,
-                                  strokeWidth: 8,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      BACK_COLOR),
-                                ),
+                    onPressed: () => setState((){applyTheme(Theme.of(context).brightness != Brightness.light);}),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.add),
+                    onPressed: () {
+                      Navigator.of(context).pushNamed('addTask');
+                    },
+                  ),
+                ],
+              ),
+            ),
+            MyFrame(
+              color: Theme.of(context).backgroundColor,
+              child: Container(
+                  alignment: Alignment.center,
+                  child: Column(mainAxisSize: MainAxisSize.max, children: [
+                    Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Stack(
+                          children: [
+                            Align(
+                              alignment: Alignment.bottomRight,
+                              child: SelectableText(
+                                'Задачи сюда: dipodbolotov@edu.hse.ru',
+                              ),
                             ),
-                        )
-                        :
-                        taskWrapper(task),
-                  )),
-                ),
-              )
-            ])));
-  }
-}
-
-class Laba {
-  final int module;
-  final int num;
-  final String name;
-  int taskQuan = 0;
-
-  Laba(this.module, this.num, this.name, {this.taskQuan});
-}
-
-class Task {
-  String name = '';
-  String text = '';
-  Map<String, String> tests;
-  Image image;
-
-  Task({this.name, this.text, this.tests});
-
-  Task.fromJson(dynamic a) {
-    this.name = a['name'];
-    if (name != null && name.isEmpty) name = null;
-    this.text = proceed(a['text']);
-    this.tests = ((a['test'] ?? {'': ''}) as Map).cast<String, String>();
-  }
-
-  String proceed(var str) {
-    //there should be a better way
-    if (str == null) return '';
-    var s = '';
-    if (str is List)
-      s = str.join();
-    else
-      s = str;
-    int from = 0;
-    int to = 0;
-    while (s.contains(r"${", from)) {
-      from = s.indexOf(r"${", from);
-      to = s.indexOf(r'}', from);
-      var pattern = s.substring(from + 2, to);
-      if (pattern.contains('|')) {
-        var vals = pattern.split('|')
-          ..removeWhere((element) => element.isEmpty)
-          ..shuffle();
-        s = s.replaceRange(from, to + 1, vals[0]);
-      }
-    }
-    return s;
+                            Container(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return FutureBuilder(
+                                    future: () async {
+                                      while (labs.isEmpty) {
+                                        await Future.delayed(
+                                            Duration(milliseconds: 500));
+                                      }
+                                      return true;
+                                    }(),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.hasData) {
+                                        return SingleChildScrollView(
+                                          child: Wrap(
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            alignment:
+                                                WrapAlignment.spaceAround,
+                                            runSpacing:
+                                                constraints.maxWidth / 40,
+                                            spacing: constraints.maxWidth / 40,
+                                            key: GlobalKey(),
+                                            children: labs.map((e) {
+                                              return Container(
+                                                width: s.aspectRatio < 0.8
+                                                    ? constraints.maxWidth
+                                                    : constraints.maxWidth / 4,
+                                                child: e.button(context,
+                                                    mobile:
+                                                        s.aspectRatio < 0.8),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        );
+                                      } else if (snapshot.hasError) {
+                                        print(snapshot.error);
+                                      }
+                                      return Align(
+                                        alignment: Alignment.center,
+                                        child: CircularProgressIndicator(
+                                          backgroundColor: Colors.transparent,
+                                          strokeWidth: 5,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            )
+                          ],
+                        ))
+                  ])),
+            ),
+          ],
+        ));
   }
 }
