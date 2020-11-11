@@ -18,7 +18,6 @@ void main() async {
   setUrlStrategy(PathUrlStrategy());
   await Firebase.initializeApp();
   firestore = FirebaseFirestore.instance;
-  // auth = FirebaseAuth.instance;
   _googleSignIn = GoogleSignIn(
     scopes: [
       'email',
@@ -134,8 +133,6 @@ class _MyHomePageState extends State<MyHomePage> {
     return null;
   }
 
-  login() async {}
-
   @override
   void initState() {
     super.initState();
@@ -187,32 +184,35 @@ class _MyHomePageState extends State<MyHomePage> {
                 icon: FirebaseAuth.instance.currentUser == null ? Icon(Icons.login) : Icon(Icons.logout),
                 onPressed: () async {
                   if (FirebaseAuth.instance.currentUser == null) {
-                    await Firebase.initializeApp();
+                    try {
+                      await Firebase.initializeApp();
+                      final GoogleSignInAccount googleSignInAccount =
+                      await _googleSignIn.signIn();
+                      final GoogleSignInAuthentication
+                      googleSignInAuthentication =
+                      await googleSignInAccount.authentication;
 
-                    final GoogleSignInAccount googleSignInAccount =
-                        await _googleSignIn.signIn();
-                    final GoogleSignInAuthentication
-                        googleSignInAuthentication =
-                        await googleSignInAccount.authentication;
+                      final AuthCredential credential =
+                      GoogleAuthProvider.credential(
+                        accessToken: googleSignInAuthentication.accessToken,
+                        idToken: googleSignInAuthentication.idToken,
+                      );
 
-                    final AuthCredential credential =
-                        GoogleAuthProvider.credential(
-                      accessToken: googleSignInAuthentication.accessToken,
-                      idToken: googleSignInAuthentication.idToken,
-                    );
+                      final UserCredential authResult = await FirebaseAuth
+                          .instance
+                          .signInWithCredential(credential);
+                      final User user = authResult.user;
 
-                    final UserCredential authResult = await FirebaseAuth
-                        .instance
-                        .signInWithCredential(credential);
-                    final User user = authResult.user;
+                      if (user != null) {
+                        assert(!user.isAnonymous);
+                        assert(await user.getIdToken() != null);
 
-                    if (user != null) {
-                      assert(!user.isAnonymous);
-                      assert(await user.getIdToken() != null);
-
-                      final User currentUser =
-                          FirebaseAuth.instance.currentUser;
-                      assert(user.uid == currentUser.uid);
+                        final User currentUser =
+                            FirebaseAuth.instance.currentUser;
+                        assert(user.uid == currentUser.uid);
+                      }
+                    } catch (e) {
+                      print(e);
                     }
                   } else {
                     _googleSignIn.signOut();
@@ -261,15 +261,15 @@ class _MyHomePageState extends State<MyHomePage> {
                               child: Wrap(
                                 crossAxisAlignment: WrapCrossAlignment.start,
                                 alignment: WrapAlignment.start,
-                                runSpacing: constraints.maxWidth / 40,
-                                spacing: constraints.maxWidth / 40,
+                                runSpacing: constraints.maxWidth / 50,
+                                spacing: constraints.maxWidth / 50,
                                 key: GlobalKey(),
                                 children: [
                                   ...labs.map((e) {
-                                    return Container(
+                                    return SizedBox(
                                       width: s.aspectRatio < 0.8
                                           ? constraints.maxWidth
-                                          : constraints.maxWidth / 4,
+                                          : constraints.maxWidth / 4.3,
                                       child: e.button(context,
                                           mobile: s.aspectRatio < 0.8),
                                     );

@@ -18,7 +18,6 @@ class MyFrame extends StatelessWidget {
       var h = min(constrains.maxHeight, s.height);
 
       var aspectRatio = w/h;
-      print(aspectRatio);
       if (w > 600 && h > 600) {
         if (aspectRatio > 15 / 9) {
           w *= 0.9;
