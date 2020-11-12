@@ -15,7 +15,8 @@ class MyFrame extends StatelessWidget {
     return LayoutBuilder(builder: (context, constrains) {
       var s = MediaQuery.of(context).size;
       var w = min(constrains.maxWidth, s.width);
-      var h = min(constrains.maxHeight, s.height);
+      var h = min(constrains.maxHeight, s.height - Theme.of(context).textTheme.headline4.fontSize);
+
 
       var aspectRatio = w/h;
       if (w > 600 && h > 600) {

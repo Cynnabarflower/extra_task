@@ -30,11 +30,9 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
   int addingTaskStatus = 0;
   List<List<String>> tests = [];
   ScrollController listController = ScrollController();
-  String lab;
 
   @override
   void initState() {
-    lab = widget.task.lab;
     tests = [];
     widget.task.tests.forEach((key, value) {
       tests.add([key, value]);
@@ -91,7 +89,10 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
             padding: const EdgeInsets.only(top: 8.0),
             child: LayoutBuilder(
               builder: (context, constraints) {
+
                 var iconColor = Theme.of(context).iconTheme.color;
+                var addForceVisible =  widget.force && addingTaskStatus == 0;
+
                 return Wrap(
                   children: [
                     SizedBox(
@@ -104,16 +105,38 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                             padding: const EdgeInsets.all(8.0),
                             child: Wrap(
                               children: [
-                                TextField(
-                                  decoration: InputDecoration(
-                                      contentPadding: const EdgeInsets.all(8),
-                                      hintText: 'Имя задачи'),
-                                  onChanged: (value) {
-                                    widget.task.name = value;
-                                  },
-                                  controller: TextEditingController()..text = widget.task.name,
-                                  maxLines: 1,
-                                  minLines: 1,
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: (constraints.maxWidth - 16) * (widget.force ? 0.9 : 1.0),
+                                      child: TextField(
+                                        decoration: InputDecoration(
+                                            contentPadding: const EdgeInsets.all(8),
+                                            hintText: 'Имя задачи'),
+                                        onChanged: (value) {
+                                          widget.task.name = value;
+                                        },
+                                        controller: TextEditingController()..text = widget.task.name,
+                                        maxLines: 1,
+                                        minLines: 1,
+                                      ),
+                                    ),
+                                    Visibility(
+                                      visible: widget.force,
+                                      child: IconButton(
+                                        icon: Icon(Icons.cancel),
+                                        onPressed: () {
+                                          FirebaseFirestore.instance.doc('labs/tasksToAdd').update({
+                                            'tasks' : FieldValue.arrayRemove([widget.orig.toFirebaseDoc()])
+                                          }).catchError((e){
+                                            print(e);
+                                          });
+                                          Navigator.popAndPushNamed(context, 'acceptTasks');
+                                        },
+                                      ),
+                                    )
+                                  ],
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 ),
                                 ConstrainedBox(
                                   constraints: BoxConstraints(
@@ -382,10 +405,7 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                                   TextEditingController()
                                                     ..text = widget.task.lab,
                                               onChanged: (value) {
-                                                if (value != null) {
-                                                  lab = value;
-                                                }
-                                                lab = '';
+                                                  widget.task.lab = value;
                                               },
                                               decoration: InputDecoration(
                                                 counterText: "",
@@ -431,8 +451,8 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                     constraints: BoxConstraints(
                                       maxHeight: constraints.maxHeight * 0.2,
                                       minHeight: constraints.maxHeight * 0.2,
-                                      maxWidth: constraints.maxWidth * (widget.force && addingTaskStatus == 0 ? 0.5 : 1.0),
-                                      minWidth: constraints.maxWidth * (widget.force && addingTaskStatus == 0 ? 0.5 : 1.0),
+                                      maxWidth: constraints.maxWidth * (addForceVisible ? 0.5 : 1.0),
+                                      minWidth: constraints.maxWidth * (addForceVisible ? 0.5 : 1.0),
                                     ),
                                     child: InkWell(
                                       onTap: () {
@@ -441,7 +461,6 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                           step = 0;
                                           setState(() {});
                                         }
-                                        widget.task.lab = lab;
                                         addingTaskStatus = 1;
                                         setState(() {});
                                         tests.forEach((element) {
@@ -524,7 +543,7 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                     ),
                                   ),
                                   Visibility(
-                                    visible: widget.force && addingTaskStatus == 0,
+                                    visible: addForceVisible,
                                     child: ConstrainedBox(
                                       constraints: BoxConstraints(
                                         maxHeight: constraints.maxHeight * 0.2,
@@ -539,14 +558,13 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                             step = 0;
                                             setState(() {});
                                           }
-                                          widget.task.lab = lab;
                                           addingTaskStatus = 1;
                                           setState(() {});
                                           tests.forEach((element) {
                                             widget.task.tests[element[0]] = element[1];
                                           });
                                           tests.clear();
-                                          var laba = FirebaseFirestore.instance.doc('labs/$lab');
+                                          var laba = FirebaseFirestore.instance.doc('labs/${widget.task.lab}');
                                           laba.update({
                                             'tasks': FieldValue.arrayUnion([
                                               widget.task.toFirebaseDoc()

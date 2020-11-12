@@ -77,8 +77,7 @@ class _AcceptTasksState extends State<AcceptTasks> {
                     IconButton(
                       icon: Icon(Icons.add),
                       onPressed: () {
-                        Route route = MaterialPageRoute(builder: (context) => AddTask());
-                        Navigator.push(context, route);
+                        Navigator.pushNamed(context, 'addTask');
                       },
                     ),
                   ],

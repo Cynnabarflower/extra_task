@@ -194,7 +194,7 @@ class _LabaState extends State<Laba> {
                       child: Text('Тут пока нет задач', style: Theme.of(context).textTheme.headline2.copyWith(color: Colors.white.withOpacity(0.8)),)
                     );
                   }
-                  return ListView( shrinkWrap: true, children: (snapshot.data as List<Widget>));
+                  return ListView( shrinkWrap: true, children: [...(snapshot.data as List<Widget>), Container(height: Theme.of(context).textTheme.headline4.fontSize)]);
                 } else if (snapshot.hasError) {
                   print(snapshot.error);
                 }
