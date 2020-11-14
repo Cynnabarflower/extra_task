@@ -15,7 +15,13 @@ class AppTheme {
       bodyColor: Colors.grey.shade300,
       displayColor: Colors.grey.shade300,
       decorationColor: Colors.grey.shade300,
+      fontFamily: 'Consolas'
     ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+        ),
+      ),
     backgroundColor: Colors.black,
     iconTheme: ThemeData.light().iconTheme.copyWith(
       color: Colors.grey.shade300
@@ -30,10 +36,16 @@ class AppTheme {
       bodyColor: Colors.lightBlue,
       displayColor: Colors.lightBlue,
       decorationColor: Colors.lightBlue,
+      fontFamily: 'Consolas'
     ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+        ),
+      ),
       iconTheme: ThemeData.light().iconTheme.copyWith(
           color: Colors.lightBlue
-      )
+      ),
     )
   );
 }

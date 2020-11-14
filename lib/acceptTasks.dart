@@ -23,18 +23,23 @@ class _AcceptTasksState extends State<AcceptTasks> {
   Timer goHome;
 
   Future<dynamic> loadTasks({force : false}) async {
-
+    try {
       var tasksToAdd = await firestore.doc('labs/tasksToAdd').get();
-        tasks =
-            (tasksToAdd['tasks'].map((e) =>
-                Task.fromFirestoreDoc(e, editable: true)).toList()).cast<Task>();
-        return tasks.map((e) => InkWell(
-          child: e,
-          onTap: () {
-            Route route = MaterialPageRoute(builder: (context) => AddTask(task: e, force: true));
-            Navigator.push(context, route);
-          },
-        )).toList();
+      tasks = tasksToAdd['tasks'].map((e) =>
+              Task.fromFirestoreDoc(e, editable: true)).toList().cast<Task>();
+      return tasks.map((e) =>
+          InkWell(
+            child: e,
+            onTap: () {
+              Route route = MaterialPageRoute(
+                  builder: (context) => AddTask(task: e));
+              Navigator.push(context, route);
+            },
+          )).toList();
+    } catch (e) {
+      print(e);
+      return [];
+    }
   }
 
 

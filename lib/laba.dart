@@ -107,17 +107,17 @@ class _LabaState extends State<Laba> {
 
 
   Timer goHome;
+  ScrollController _controller = ScrollController();
 
   Future<List<dynamic>> loadTasks({force : false}) async {
 
     if (!force && widget.tasks.isNotEmpty) {
       return widget.tasks;
     }
-      var lab = (await firestore.doc('labs/' + widget.path).get());
+      var lab = await FirebaseFirestore.instance.doc('labs/' + widget.path).get();
       if (lab.exists) {
-        widget.tasks =
-            (lab['tasks'].map((e) => Task.fromFirestoreDoc(e)).toList()).cast<
-                Task>();
+        widget.tasks = ((lab['tasks'] as Map<String, dynamic>).entries.map((e)
+            => Task.fromFirestoreDoc(e.value, id: e.key,)).toList()).cast<Task>();
         return widget.tasks;
       } else return [];
   }
@@ -151,6 +151,7 @@ class _LabaState extends State<Laba> {
                       icon: Icon(Icons.shuffle_rounded),
                       onPressed: () {
                         widget.tasks.shuffle();
+                        _controller.animateTo(0, duration: Duration(milliseconds: 500), curve: Curves.easeInOut);
                         setState(() {});
                       },
                     ),
@@ -194,7 +195,7 @@ class _LabaState extends State<Laba> {
                       child: Text('Тут пока нет задач', style: Theme.of(context).textTheme.headline2.copyWith(color: Colors.white.withOpacity(0.8)),)
                     );
                   }
-                  return ListView( shrinkWrap: true, children: [...(snapshot.data as List<Widget>), Container(height: Theme.of(context).textTheme.headline4.fontSize)]);
+                  return ListView(controller: _controller, shrinkWrap: true, children: [...(snapshot.data as List<Task>), Container(height: Theme.of(context).textTheme.headline4.fontSize)]);
                 } else if (snapshot.hasError) {
                   print(snapshot.error);
                 }

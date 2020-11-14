@@ -8,6 +8,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'laba.dart';
+import 'main.dart';
 import 'myFrame.dart';
 
 class AddTask extends StatefulWidget {
@@ -15,13 +17,11 @@ class AddTask extends StatefulWidget {
   State createState() => _AddTaskState();
 
   Task task;
-  bool force;
   Task orig;
 
-  AddTask({Task task, this.force: false}) {
-    orig = task == null ? null : Task.fromFirestoreDoc(task.toFirebaseDoc());
+  AddTask({Task task}) {
+    orig = task == null ? null : Task.fromFirestoreDoc(task.toFirebaseDoc(), id: task.id,);
     this.task = task ?? Task();
-    this.force = force ?? false;
   }
 }
 
@@ -91,7 +91,7 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
               builder: (context, constraints) {
 
                 var iconColor = Theme.of(context).iconTheme.color;
-                var addForceVisible =  widget.force && addingTaskStatus == 0;
+                var addForceVisible =  MyApp.isAdmin && addingTaskStatus == 0;
 
                 return Wrap(
                   children: [
@@ -108,7 +108,7 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                 Row(
                                   children: [
                                     Container(
-                                      width: (constraints.maxWidth - 16) * (widget.force ? 0.9 : 1.0),
+                                      width: (constraints.maxWidth - 16) * (MyApp.isAdmin ? 0.9 : 1.0),
                                       child: TextField(
                                         decoration: InputDecoration(
                                             contentPadding: const EdgeInsets.all(8),
@@ -122,16 +122,28 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                       ),
                                     ),
                                     Visibility(
-                                      visible: widget.force,
+                                      visible: MyApp.isAdmin,
                                       child: IconButton(
-                                        icon: Icon(Icons.cancel),
+                                        icon: Icon(Icons.delete, color: Colors.red.withOpacity(0.7),),
                                         onPressed: () {
-                                          FirebaseFirestore.instance.doc('labs/tasksToAdd').update({
-                                            'tasks' : FieldValue.arrayRemove([widget.orig.toFirebaseDoc()])
-                                          }).catchError((e){
-                                            print(e);
-                                          });
-                                          Navigator.popAndPushNamed(context, 'acceptTasks');
+                                          if (widget.orig.id != null) {
+                                            FirebaseFirestore.instance.doc('labs/${widget.orig.lab}').update({
+                                              'tasks.${widget.orig.id}' : FieldValue.delete() }).then((value) {
+                                              var route = MaterialPageRoute(
+                                                  builder: (context) => Laba(widget.orig.lab),
+                                                  settings: RouteSettings(name: '/${widget.orig.lab}'));
+                                              Navigator.of(context).pushReplacement(route);
+                                            });
+                                          } else {
+                                            FirebaseFirestore.instance.doc(
+                                                'labs/tasksToAdd').update({
+                                              'tasks': FieldValue.arrayRemove(
+                                                  [widget.orig.toFirebaseDoc()])
+                                            }).then((value) {
+                                              Navigator.popAndPushNamed(
+                                                  context, 'acceptTasks');
+                                            });
+                                          }
                                         },
                                       ),
                                     )
@@ -185,7 +197,7 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                             children: [
                                               Container(
                                                 width:
-                                                    constraints.maxWidth * 0.5 -
+                                                    constraints.maxWidth * 0.45 -
                                                         3 -
                                                         8,
                                                 padding:
@@ -208,7 +220,7 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                                   thickness: 3, width: 6),
                                               Container(
                                                 width:
-                                                    constraints.maxWidth * 0.5 -
+                                                    constraints.maxWidth * 0.45 -
                                                         3 -
                                                         8,
                                                 padding:
@@ -227,6 +239,15 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                                     maxLines: 30,
                                                   ),
                                                 ),
+                                              ),
+                                              IconButton(
+                                                icon: Icon(Icons.delete, color: Colors.red.withOpacity(0.7)),
+                                                onPressed: () {
+                                                  try {
+                                                    tests.removeWhere((element) => element[0] == e[0]);
+                                                    setState(() {});
+                                                  } catch (_) {}
+                                                },
                                               )
                                             ],
                                             mainAxisAlignment:
@@ -389,31 +410,72 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                       ),
                                       Row(
                                         children: [
-                                          Container(
-                                              padding: const EdgeInsets.all(8),
-                                              child: Text('Номер лабы:',
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .apply(
-                                                          bodyColor:
-                                                              Theme.of(context)
-                                                                  .hintColor)
-                                                      .subtitle1)),
-                                          LimitedBox(
-                                            child: TextField(
-                                              controller:
-                                                  TextEditingController()
-                                                    ..text = widget.task.lab,
-                                              onChanged: (value) {
-                                                  widget.task.lab = value;
-                                              },
-                                              decoration: InputDecoration(
-                                                counterText: "",
-                                              ),
-                                              maxLength: 10,
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    child: Text('Номер лабы:',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .apply(
+                                                                bodyColor:
+                                                                    Theme.of(context)
+                                                                        .hintColor)
+                                                            .subtitle1)),
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller:
+                                                        TextEditingController()
+                                                          ..text = widget.task.lab,
+                                                    onChanged: (value) {
+                                                        widget.task.lab = value;
+                                                    },
+                                                    decoration: InputDecoration(
+                                                      counterText: "",
+                                                    ),
+                                                    maxLength: 10,
+                                                  ),
+                                                ),
+                                              ],
+                                              mainAxisSize: MainAxisSize.min,
                                             ),
-                                            maxWidth: 50,
                                           ),
+                                          MyApp.isAdmin ? Expanded(
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    child: Text('id:',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .apply(
+                                                            bodyColor:
+                                                            Theme.of(context)
+                                                                .hintColor)
+                                                            .subtitle1)),
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller:
+                                                    TextEditingController()
+                                                      ..text = widget.task.id,
+                                                    onChanged: (value) {
+                                                      widget.task.id = value;
+                                                    },
+                                                  ),
+                                                ),
+                                                Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    child: IconButton(
+                                                      icon: Icon(Icons.refresh),
+                                                      onPressed: () {
+                                                        widget.task.setId();
+                                                        setState(() {});
+                                                      },
+                                                    ))
+                                              ],
+                                            ),
+                                          ) : Container(),
                                         ],
                                       ),
                                       Container(
@@ -456,44 +518,7 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                     ),
                                     child: InkWell(
                                       onTap: () {
-                                        if (widget.task.name.trim().isEmpty ||
-                                            widget.task.text.trim().isEmpty) {
-                                          step = 0;
-                                          setState(() {});
-                                        }
-                                        addingTaskStatus = 1;
-                                        setState(() {});
-                                        tests.forEach((element) {
-                                          widget.task.tests[element[0]] = element[1];
-                                        });
-                                        tests.clear();
-                                        var ttt = FirebaseFirestore.instance
-                                            .collection('labs')
-                                            .doc('tasksToAdd');
-                                        ttt.update({
-                                          'tasks': FieldValue.arrayUnion([
-                                            widget.task.toFirebaseDoc()
-                                              ..['mail'] = widget.task.mail,
-                                          ])
-                                        }).then((value) {
-                                          addingTaskStatus = 2;
-                                          Future.delayed(Duration(seconds: 1), () {
-                                            widget.task = Task();
-                                            addingTaskStatus = 0;
-                                            step = 0;
-                                            setState(() {});
-                                          });
-                                          setState(() {});
-                                        }, onError: () {
-                                          addingTaskStatus = 3;
-                                          Future.delayed(
-                                              Duration(seconds: 1),
-                                              () => setState(() {
-                                                    addingTaskStatus = 0;
-                                                    step = 0;
-                                                  }));
-                                          setState(() {});
-                                        });
+                                        uploadTask(force: false);
                                       },
                                       child: Container(
                                         decoration: BoxDecoration(
@@ -553,47 +578,7 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
                                       ),
                                       child: InkWell(
                                         onTap: () async {
-                                          if (widget.task.name.trim().isEmpty ||
-                                              widget.task.text.trim().isEmpty) {
-                                            step = 0;
-                                            setState(() {});
-                                          }
-                                          addingTaskStatus = 1;
-                                          setState(() {});
-                                          tests.forEach((element) {
-                                            widget.task.tests[element[0]] = element[1];
-                                          });
-                                          tests.clear();
-                                          var laba = FirebaseFirestore.instance.doc('labs/${widget.task.lab}');
-                                          laba.update({
-                                            'tasks': FieldValue.arrayUnion([
-                                              widget.task.toFirebaseDoc()
-                                            ])
-                                          }).then((value) {
-                                            addingTaskStatus = 2;
-                                            FirebaseFirestore.instance.doc('labs/tasksToAdd').update({
-                                              'tasks' : FieldValue.arrayRemove([widget.orig.toFirebaseDoc()])
-                                            }).catchError((e){
-                                              print(e);
-                                            });
-                                            Future.delayed(Duration(seconds: 1), () {
-                                              widget.task = Task();
-                                              addingTaskStatus = 0;
-                                              step = 0;
-                                              setState(() {});
-                                            });
-                                            setState(() {});
-                                          }, onError: (e) {
-                                            print(e);
-                                            addingTaskStatus = 3;
-                                            Future.delayed(
-                                                Duration(seconds: 1),
-                                                    () => setState(() {
-                                                  addingTaskStatus = 0;
-                                                  step = 0;
-                                                }));
-                                            setState(() {});
-                                          });
+                                          uploadTask(force: true);
                                         },
                                         child: Container(
                                           decoration: BoxDecoration(
@@ -701,4 +686,90 @@ class _AddTaskState extends State<AddTask> with SingleTickerProviderStateMixin {
       ],
     ));
   }
+
+  Future uploadTask({force : false}) async {
+
+    if (widget.task.name.trim().isEmpty ||
+        widget.task.text.trim().isEmpty) {
+      step = 0;
+      setState(() {});
+      return;
+    }
+    if ((widget.task.id == null || widget.task.id.isEmpty) && force) {
+      widget.task.setId();
+    }
+
+    addingTaskStatus = 1;
+    setState(() {});
+    widget.task.tests.clear();
+    tests.forEach((element) {
+      widget.task.tests[element[0]] = element[1];
+    });
+    tests.clear();
+
+    if (force) {
+      var laba = FirebaseFirestore.instance.doc('labs/${widget.task.lab}');
+      laba.update({
+        'tasks.${widget.task.id}': (widget.task.toFirebaseDoc()
+          ..['mail'] = widget.task.mail)
+      }).then((value) {
+        addingTaskStatus = 2;
+        FirebaseFirestore.instance.doc('labs/tasksToAdd').update({
+          'tasks' : FieldValue.arrayRemove([widget.orig.toFirebaseDoc()])
+        }).catchError((e){
+          print(e);
+        });
+        Future.delayed(Duration(seconds: 1), () {
+
+          widget.task = Task();
+          widget.orig = Task.fromFirestoreDoc(widget.task.toFirebaseDoc());
+          addingTaskStatus = 0;
+          step = 0;
+          setState(() {});
+        });
+        setState(() {});
+      }, onError: (e) {
+        print(e);
+        addingTaskStatus = 3;
+        Future.delayed(
+            Duration(seconds: 1),
+                () => setState(() {
+              addingTaskStatus = 0;
+              step = 0;
+            }));
+        setState(() {});
+      });
+
+    } else {
+      var ttt = FirebaseFirestore.instance
+          .collection('labs')
+          .doc('tasksToAdd');
+      ttt.update({
+        'tasks': FieldValue.arrayUnion([
+          widget.task.toFirebaseDoc()
+            ..['mail'] = widget.task.mail,
+        ])
+      }).then((value) {
+        addingTaskStatus = 2;
+        Future.delayed(Duration(seconds: 1), () {
+          widget.task = Task();
+          addingTaskStatus = 0;
+          step = 0;
+          setState(() {});
+        });
+        setState(() {});
+      }, onError: () {
+        addingTaskStatus = 3;
+        Future.delayed(
+            Duration(seconds: 1),
+                () => setState(() {
+              addingTaskStatus = 0;
+              step = 0;
+            }));
+        setState(() {});
+      });
+
+    }
+  }
+
 }

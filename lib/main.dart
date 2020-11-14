@@ -39,6 +39,24 @@ GoogleSignInAccount user;
 List<Laba> labs = [];
 
 class MyApp extends StatelessWidget {
+
+  static bool isAdmin = false;
+
+  static Future<bool> updateAdmin() async {
+    if (FirebaseAuth.instance.currentUser == null || FirebaseAuth.instance.currentUser.isAnonymous) {
+      MyApp.isAdmin = false;
+      return MyApp.isAdmin;
+    }
+    try {
+      var e = await FirebaseFirestore.instance.doc(
+          'users/${FirebaseAuth.instance.currentUser.uid}').get();
+      MyApp.isAdmin = e.exists;
+    } catch (_) {
+      MyApp.isAdmin = false;
+    }
+    return MyApp.isAdmin;
+  }
+
   MyApp() {
     loadLabNames();
   }
@@ -80,10 +98,8 @@ class MyApp extends StatelessWidget {
                 if (lab == null) {
                   return MaterialPageRoute(
                       builder: (context) => Laba(uri.pathSegments.last),
-                      settings:
-                          RouteSettings(name: '/${uri.pathSegments.last}'));
-                } else
-                  return MaterialPageRoute(
+                      settings: RouteSettings(name: '/${uri.pathSegments.last}'));
+                } else return MaterialPageRoute(
                       builder: (context) => lab,
                       settings: RouteSettings(name: '/${lab.path}'));
               }
@@ -166,23 +182,27 @@ class _MyHomePageState extends State<MyHomePage> {
             children: [
               FutureBuilder(
                 future: () async {
-                  if (FirebaseAuth.instance.currentUser == null || FirebaseAuth.instance.currentUser.isAnonymous)
-                    return false;
-                  var e = await FirebaseFirestore.instance.doc('users/${FirebaseAuth.instance.currentUser.uid}').get();
-                  return e.exists;
+                  await MyApp.updateAdmin();
+                  return MyApp.isAdmin;
                 }(),
                 builder: (context, snapshot) {
-                  return Visibility(visible: snapshot.hasData && snapshot.data, child: IconButton(
-                    icon: Icon(Icons.mail),
-                    onPressed: () => setState(() {
-                      Navigator.pushNamed(context, 'acceptTasks');
-                    }),
+                  return Visibility(visible: snapshot.hasData && snapshot.data, child:
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.mail),
+                        onPressed: () => setState(() {
+                          Navigator.pushNamed(context, 'acceptTasks');
+                        }),
+                      ),
+                    ],
                   ),);
                 },
               ),
               IconButton(
-                icon: FirebaseAuth.instance.currentUser == null ? Icon(Icons.login) : Icon(Icons.logout),
+                icon: (FirebaseAuth.instance.currentUser == null) ? Icon(Icons.login) : Icon(Icons.logout),
                 onPressed: () async {
+                  MyApp.isAdmin = false;
                   if (FirebaseAuth.instance.currentUser == null) {
                     try {
                       await Firebase.initializeApp();
@@ -267,11 +287,11 @@ class _MyHomePageState extends State<MyHomePage> {
                                 children: [
                                   ...labs.map((e) {
                                     return SizedBox(
-                                      width: s.aspectRatio < 0.8
+                                      width: s.aspectRatio < 0.9
                                           ? constraints.maxWidth
                                           : constraints.maxWidth / 4.3,
                                       child: e.button(context,
-                                          mobile: s.aspectRatio < 0.8),
+                                          mobile: s.aspectRatio < 0.9),
                                     );
                                   }).toList(),
                                   Container(
